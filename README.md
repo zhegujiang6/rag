@@ -1,123 +1,95 @@
 # 智能文档检索助手
 
-基于 RAG + LLM 的智能文档检索与问答系统。支持多格式文档上传、知识库管理、语义检索和流式对话。
+基于 RAG 与大语言模型的文档检索、知识库问答和效果评测系统。当前仓库包含一套可直接运行的 Python 应用，以及一套独立的 Java 微服务升级版。
 
-## 功能特性
+## 快速启动（推荐）
 
-- 📁 **多格式文档支持**: PDF / Word / TXT / Markdown
-- 📚 **多知识库管理**: 独立知识库，文档关联
-- 🔍 **语义检索**: 基于向量相似度的智能搜索（父子块策略）
-- 💬 **流式对话**: SSE 打字机效果，Markdown 渲染
-- 🧠 **双模式**: RAG 知识库问答 + 普通 LLM 对话
-- 🐳 **Docker 部署**: 一键启动所有服务
+1. 复制环境变量模板并填写至少一个可用的 LLM/Embedding API Key：
 
-## 技术栈
+   ```powershell
+   Copy-Item .env.example .env
+   ```
 
-| 层级 | 技术 |
-|------|------|
-| 后端 | FastAPI + SQLAlchemy 2.0 + ChromaDB |
-| 前端 | Vue 3 + Vite + TailwindCSS |
-| LLM | OpenAI API 兼容接口 |
-| 数据库 | MySQL 8.0 |
-| 部署 | Docker + Docker Compose |
+2. 构建并启动 Python 主应用、RAG API、MySQL 和 ChromaDB：
 
-## 快速开始
+   ```powershell
+   docker compose up -d --build
+   ```
 
-### 1. 配置环境变量
+3. 访问服务：
 
-```bash
-cp .env.example .env
-# 编辑 .env，填入你的 LLM API Key
+   - Streamlit 应用：<http://localhost:8501>
+   - RAG API 文档：<http://localhost:8100/docs>
+   - RAG API 健康检查：<http://localhost:8100/health>
+
+查看状态和日志：
+
+```powershell
+docker compose ps
+docker compose logs -f app rag-server
 ```
-
-### 2. Docker Compose 启动
-
-```bash
-docker-compose up -d
-```
-
-### 3. 访问
-
-- 前端: http://localhost
-- 后端 API 文档: http://localhost:8000/docs
-- 健康检查: http://localhost:8000/health
-
-### 4. 使用
-
-1. 上传文档（PDF/Word/TXT/Markdown）
-2. 创建知识库并关联文档
-3. 选择知识库，开始 RAG 智能问答
-4. 不选知识库即为普通对话模式
 
 ## 本地开发
 
-### 后端
+需要 Python 3.11+。先安装当前项目及两类应用依赖：
 
-```bash
-cd backend
-pip install -r requirements.txt
-
-# 启动 MySQL (Docker)
-docker run -d --name mysql-dev \
-  -e MYSQL_ROOT_PASSWORD=password \
-  -e MYSQL_DATABASE=doc_search \
-  -p 3306:3306 mysql:8.0
-
-# 启动后端
-uvicorn app.main:app --reload --port 8000
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e ".[streamlit,api,dev]"
 ```
 
-### 前端
+只使用 Docker 启动基础设施：
 
-```bash
-cd frontend
-npm install
-npm run dev
+```powershell
+docker compose up -d mysql chroma
 ```
 
-访问 http://localhost:5173
+分别启动两个 Python 入口：
 
-## API 概览
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/documents/upload` | 上传文档 |
-| GET | `/api/v1/documents` | 文档列表 |
-| DELETE | `/api/v1/documents/{id}` | 删除文档 |
-| POST | `/api/v1/knowledge-bases` | 创建知识库 |
-| GET | `/api/v1/knowledge-bases` | 知识库列表 |
-| POST | `/api/v1/chat` | 普通对话 (SSE) |
-| POST | `/api/v1/chat/rag` | RAG 问答 (SSE) |
-| GET | `/api/v1/conversations` | 对话历史 |
-
-完整 API 文档见: http://localhost:8000/docs
-
-## 项目结构
-
+```powershell
+streamlit run apps/streamlit/app.py
+python -m smart_doc_search.api.main
 ```
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI 入口
-│   │   ├── config.py            # 配置管理
-│   │   ├── api/                 # API 路由
-│   │   ├── core/                # 核心引擎
-│   │   │   ├── document_parser.py
-│   │   │   ├── document_splitter.py
-│   │   │   ├── embedding_service.py
-│   │   │   ├── vector_store.py
-│   │   │   ├── llm_client.py
-│   │   │   └── rag_engine.py
-│   │   ├── models/              # ORM 模型
-│   │   ├── middleware/          # 中间件
-│   │   └── utils/               # 工具
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── views/Home.vue
-│   │   ├── components/          # Vue 组件
-│   │   ├── stores/              # Pinia 状态管理
-│   │   └── api/                 # API 封装
-│   └── Dockerfile
-├── docker-compose.yml
-└── .env.example
+
+## 目录结构
+
+```text
+├─ apps/
+│  └─ streamlit/             # Streamlit 入口、公共 UI 和功能页面
+├─ src/smart_doc_search/
+│  ├─ api/                   # FastAPI RAG 接口与路由
+│  ├─ core/                  # 配置等核心基础设施
+│  ├─ data/                  # SQLAlchemy 连接和数据模型
+│  └─ services/              # 解析、切分、检索、问答、评测等业务能力
+├─ deployment/docker/        # Python 应用的镜像定义
+├─ data/
+│  ├─ chroma/                # 本地向量库数据
+│  ├─ uploads/               # 上传的原始文档
+│  ├─ extracted_images/      # 文档解析产生的图片
+│  └─ evaluations/           # 评测数据集
+├─ platform/java/            # 独立的 Java 微服务升级版
+├─ tools/resume/             # 与主应用无关的简历文档工具
+├─ docker-compose.yml        # Python 主应用的一键编排
+└─ pyproject.toml            # Python 包与依赖声明
+```
+
+`data/` 中已有的上传文件和 ChromaDB 数据在整理时被完整保留。`.env` 只用于本机配置，不应提交到版本库。
+
+## Java 微服务版
+
+Java 版位于 [`platform/java`](platform/java/README.md)，采用 Spring Boot、Spring Cloud、Redis、Nacos、MinIO、RocketMQ 和 ChromaDB Sidecar。它与根目录 Python 主应用相互独立：
+
+```powershell
+Set-Location platform/java
+mvn -DskipTests compile
+docker compose up -d --build
+```
+
+## 验证
+
+```powershell
+python -m pytest
+docker compose config -q
+mvn -q -f platform/java/pom.xml -DskipTests compile
 ```

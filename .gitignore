@@ -1,0 +1,29 @@
+# Local configuration and secrets
+.env
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Runtime data
+data/chroma/
+data/uploads/
+data/extracted_images/
+
+# Java build output
+platform/java/**/target/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

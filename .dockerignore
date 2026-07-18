@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.idea
+.claude
+.agents
+.codex-review
+.docx-review
+**/__pycache__
+**/*.pyc
+**/target
+data/chroma
+data/uploads
+data/extracted_images
+platform
+tools
+tests
