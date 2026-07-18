@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"from docx import Document; doc = Document\\('流程思路.docx'\\); [print\\(p.text\\) for p in doc.paragraphs]\")",
+      "Bash(python -c \"from docx import Document; doc = Document\\('流程思路.docx'\\); [print\\(p.text\\) for p in doc.paragraphs]\")",
+      "Bash(pip install *)",
+      "Bash(python3 -c ' *)",
+      "Bash(/d/conda/python *)",
+      "Bash(python -c ' *)",
+      "Bash(python _generate_report.py)",
+      "Bash(rm \"C:\\\\Users\\\\Administrator\\\\Desktop\\\\智能文档检索助手\\\\pages\\\\todo.py\")",
+      "Bash(rm \"C:\\\\Users\\\\Administrator\\\\Desktop\\\\智能文档检索助手\\\\pages\\\\__pycache__\\\\todo.cpython-313.pyc\")",
+      "Read(//c/Users/Administrator/Desktop/**)",
+      "Bash(rm /c/Users/Administrator/Desktop/_gen_doc.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/semantic_splitter.py'\\).read\\(\\)\\); print\\('semantic_splitter.py OK'\\); ast.parse\\(open\\('services/document_splitter.py'\\).read\\(\\)\\); print\\('document_splitter.py OK'\\); ast.parse\\(open\\('config.py'\\).read\\(\\)\\); print\\('config.py OK'\\)\")",
+      "Bash(python -c \"import ast, sys; files=['services/semantic_splitter.py','services/document_splitter.py','config.py']; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) and print\\(f+' OK'\\) for f in files]\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('pages/documents.py', encoding='utf-8'\\).read\\(\\)\\); print\\('documents.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/tag_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('tag_service.py OK'\\)\")",
+      "Bash(python -c \"from docx import Document; doc = Document\\('项目优化.docx'\\); print\\('\\\\n'.join\\([p.text for p in doc.paragraphs]\\)\\)\")",
+      "Bash(python -c \"import zipfile; from xml.etree import ElementTree; z = zipfile.ZipFile\\('项目优化.docx'\\); xml = z.read\\('word/document.xml'\\); tree = ElementTree.fromstring\\(xml\\); ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}; print\\('\\\\n'.join\\([t.text for t in tree.iter\\('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'\\) if t.text]\\)\\)\")",
+      "Bash(xargs wc -l)",
+      "Bash(xargs -0 wc -l)",
+      "Bash(streamlit run *)",
+      "Bash(taskkill //F //IM streamlit.exe)",
+      "Bash(taskkill //F //IM python.exe //FI \"WINDOWTITLE eq Streamlit*\")",
+      "Bash(python -c \"from services.ragas_evaluator import ragas_evaluator; print\\('OK'\\)\")",
+      "Bash(python -c \"from rag_server.main import app; print\\('OK: FastAPI app imported successfully'\\); print\\(f'Routes: {len\\(app.routes\\)}'\\)\")",
+      "Bash(timeout 8 python -m rag_server.main)",
+      "Bash(curl -s http://localhost:8100/health)",
+      "Bash(python -m json.tool)",
+      "Bash(python -m rag_server.main)",
+      "Bash(curl -s http://localhost:8100/api/rag/search -X POST -H \"Content-Type: application/json\" -d '{\"query\":\"测试\",\"knowledge_base_id\":1,\"top_k\":3}')",
+      "Bash(python *)",
+      "Bash(pkill -f \"rag_server\")",
+      "Bash(pip list *)"
+    ]
+  }
+}

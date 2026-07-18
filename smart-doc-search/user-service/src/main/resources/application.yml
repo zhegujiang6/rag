@@ -1,0 +1,78 @@
+# ============================================================
+# User Service 配置
+# ============================================================
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+
+  # 数据源 (MySQL)
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/doc_search?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 10000
+
+  # JPA
+  jpa:
+    hibernate:
+      ddl-auto: validate   # 不自动建表, 使用 SQL 脚本管理 schema
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+  # Redis (Session/Token)
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+
+  # Nacos
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+      config:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        file-extension: yml
+        shared-configs:
+          - data-id: common-config.yml
+            group: DEFAULT_GROUP
+            refresh: true
+
+# JWT 配置 (生产环境通过 Nacos 动态下发)
+jwt:
+  secret: ${JWT_SECRET:smart-doc-search-jwt-secret-key-2024-min-length-32}
+  access-expire-ms: 900000       # 15 分钟
+  refresh-expire-ms: 604800000   # 7 天
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.smartdoc.user: DEBUG

@@ -1,0 +1,285 @@
+智能文档检索助手 — RAG 优化差距分析及评测建议
+生成日期：2026年06月30日
+对照《RAG优化》文档 vs. 当前项目实际实现
+一、概述
+本报告对照《RAG优化.docx》中提出的 11 个优化方向，逐一分析当前项目代码的实现状态。项目当前采用 Streamlit + ChromaDB + MySQL 架构，已实现基础 RAG 流程：文档上传 → 解析 → 固定大小切分（父子块策略） → 向量嵌入 → ChromaDB 检索 → LLM 生成回答。以下是各优化方向的详细差距分析。
+二、逐项差距分析
+2.1 入库前 — 知识库建立阶段
+【RAG优化文档要求】数据清洗、索引优化、知识拆分不破坏语义、打 tag 元数据标签。
+子项
+当前状态
+差距说明
+数据清洗
+❌ 未实现
+document_parser.py 仅做格式解析，无内容清洗（去除噪声、特殊字符、重复段落等）
+索引策略
+⚠️ 部分实现
+仅用 ChromaDB 默认 HNSW 索引 + cosine 距离，未针对不同知识类型设计索引策略
+语义切分
+❌ 未实现
+document_splitter.py 按固定 token 数切分（256/1024），未使用 LLM 做语义边界识别；段落边界识别依赖双换行和标点符号，较粗糙
+Tag 元数据标签
+❌ 未实现
+metadata 字段仅存 page/type/format 等基础信息，无自动打标签、分类标记功能
+2.2 高效检索阶段 — 多路召回
+【RAG优化文档要求】多路召回。当前仅实现了向量语义检索一条路径。
+子项
+当前状态
+差距说明
+向量检索（Dense）
+✅ 已实现
+vector_store.py + embedding_service.py 实现了完整的向量检索链路
+BM25（Sparse）
+❌ 未实现
+无任何关键词/稀疏检索能力，缺少对精确关键词匹配的支持
+GraphRAG
+❌ 未实现
+无知识图谱构建和实体关系检索能力
+混合检索融合
+❌ 未实现
+无多路检索结果的融合排序机制（如 RRF 倒数排名融合）
+2.3 排序阶段 — 业务 Tag 加权
+【RAG优化文档要求】根据真实业务 tag 去打分。当前仅有基于 cosine similarity 的单一排序，无任何业务维度的加权或重排序。
+2.4 线上数据反馈回流 — 知识飞轮
+【RAG优化文档要求】线上数据反馈回流，跑出真正的知识飞轮。当前完全未实现。
+子项
+当前状态
+差距说明
+用户反馈收集
+❌ 未实现
+chat.py 对话页面无点赞/踩、评分等反馈入口；无反馈数据存储表
+反馈数据利用
+❌ 未实现
+无反馈数据回传机制，无法利用反馈优化检索排序或补充知识库
+知识自动更新
+❌ 未实现
+无过期知识清理策略，无知识新鲜度评分机制
+2.5 知识工程优化
+【RAG优化文档要求】Chunk 优化（LLM 语义切分、过长拆分、过短合并）、自动补充 tag 标签、审核类/非审核类知识识别、Rerank 加权计算、知识清理。此方向差距最大。
+子项
+当前状态
+差距说明
+LLM 语义切分
+❌ 未实现
+document_splitter.py 纯规则切分，未调用 LLM 做上下文语义边界识别
+过长拆分 / 过短合并
+⚠️ 部分实现
+有 _split_long_segment 按句号切分过长段落；但合并策略固定（每4子块→1父块），非基于语义相关性的动态合并
+自动 Tag 补充
+❌ 未实现
+无 LLM 自动打标签流程，数据库模型中无 tags 字段
+审核/非审核分类
+❌ 未实现
+无内容合规或知识类型分类能力
+Rerank 加权计算
+❌ 未实现
+rag_engine.retrieve() 只返回 similarity 排序结果，无重排序模型或加权逻辑
+知识清理
+❌ 未实现
+无定时任务或策略清理过期/低质量/重复知识；向量库数据只增不减（除手动删除外）
+2.6 Query 改写
+【RAG优化文档要求】主改写（补全语义、规范表达）、子查询改写（拆成多个子问题）、同义改写（扩大召回范围）、模型微调。当前完全未实现。
+子项
+当前状态
+差距说明
+主 Query 改写
+❌ 未实现
+rag_engine.retrieve() 直接用原始 query 做向量化检索，无改写步骤
+子查询拆分
+❌ 未实现
+复杂问题无拆解能力，单 query 检索可能遗漏多方面的相关信息
+同义改写
+❌ 未实现
+无生成同义 query 扩大召回面的机制
+模型微调
+❌ 未实现
+未涉及任何模型微调或适配工作
+2.7 检索召回优化
+【RAG优化文档要求】向量检索、BM25、GraphRAG、标签级定向检索。仅向量检索已实现，其余三项均需从零建设。
+2.8 Rerank 和截断优化
+【RAG优化文档要求】把 query 和检索结果放一起做 attention 计算，表示两者之间的相关程度，截断前几个生成回答。
+子项
+当前状态
+差距说明
+Cross-Attention Rerank
+❌ 未实现
+无 Cross-encoder 或 attention-based 重排序模型
+智能截断
+⚠️ 简单实现
+rag_engine.py L186-192 仅做字符数硬截断（30000/20000），非基于相关性分数的截断
+2.9 可信生成优化
+【RAG优化文档要求】类似评测，知识可达率。当前完全未实现。无任何自动化评测能力，无法衡量检索命中率、答案准确率、知识覆盖率等关键指标。
+2.10 过程评测优化
+【RAG优化文档要求】对每个环节进行评测，查看到底是哪一环节出了问题，然后针对性优化。当前完全未实现——无分环节评测，无法定位问题是出在检索、排序还是生成环节。
+2.11 Agentic RAG
+【RAG优化文档要求】Agent 规划要不要检索。当前完全未实现。系统在 RAG 模式下总是执行检索，没有判断问题是否需要检索的决策层。chat.py 已区分 RAG/普通对话两种模式，但这是用户手动切换，而非 Agent 自动判断。
+三、总体完成度汇总
+优化方向
+完成度
+优先级
+预估工作量
+1. 入库前知识库建立
+15%
+P0 · 高
+2-3 周
+2. 多路召回
+25%
+P0 · 高
+2-3 周
+3. 业务 Tag 加权排序
+0%
+P1 · 中
+1-2 周
+4. 反馈回流 / 知识飞轮
+0%
+P1 · 中
+2-3 周
+5. 知识工程优化
+10%
+P0 · 高
+3-4 周
+6. Query 改写
+0%
+P0 · 高
+2-3 周
+7. 检索召回（BM25/GraphRAG）
+25%
+P0 · 高
+3-4 周
+8. Rerank 和截断优化
+10%
+P1 · 中
+1-2 周
+9. 可信生成优化（评测）
+0%
+P0 · 高
+2-3 周
+10. 过程评测优化
+0%
+P1 · 中
+2-3 周
+11. Agentic RAG
+0%
+P2 · 低
+2-3 周
+⚠️ 整体评估：11 个优化方向中，除基础的向量检索链路外，超过 80% 的优化点尚未实现。项目目前处于 RAG 基础可用阶段（MVP），距离文档规划的"优化后"状态有较大差距。
+四、评测系统设计建议
+4.1 评测体系总体架构
+建议构建三层评测体系：离线评测（Offline）→ 在线评测（Online）→ 人工评测（Human-in-the-loop）。以离线评测为核心，覆盖 RAG 管线的每个环节。
+4.2 评测数据集构建
+第一步：构建标准评测数据集（建议放在项目 data/eval/ 目录下）
+问答对数据集（QA Pairs）：人工标注 50-200 组 {question, answer, relevant_docs} 三元组
+文档集：从已上传的文档中选取代表性样本，覆盖不同格式和领域
+Query 分类标注：标注 query 类型（事实查询 / 推理 / 摘要 / 对比 / 多跳推理），便于分类评测
+难度分级标注：简单（单文档直接匹配）/ 中等（跨文档综合）/ 困难（需要推理）
+4.3 分环节评测指标
+A. 检索环节评测（Retrieval Evaluation）
+指标
+说明
+目标值
+Recall@K
+Top-K 结果中包含正确答案文档的比例
+> 90%
+Precision@K
+Top-K 结果中相关文档的比例
+> 80%
+MRR
+第一个相关文档排名的倒数均值（Mean Reciprocal Rank）
+> 0.8
+NDCG@K
+考虑排序位置的归一化折损累计增益
+> 0.85
+Hit Rate
+至少命中一个相关文档的 query 比例
+> 95%
+知识可达率
+知识库中确实存在答案的 query 比例（评测知识覆盖度）
+> 90%
+B. 生成环节评测（Generation Evaluation）
+指标
+说明
+评测方式
+Faithfulness（忠实度）
+答案是否忠实于检索到的文档内容，不编造
+LLM-as-Judge / RAGAS
+Answer Relevance
+答案是否直接回答了用户问题
+LLM-as-Judge / RAGAS
+Context Relevance
+检索到的文档内容是否与问题相关
+RAGAS
+Context Recall
+检索到的文档覆盖了参考答案的多少信息
+RAGAS
+BLEU / ROUGE
+与参考答案的字面相似度（传统 NLG 指标）
+nltk / rouge-score
+语义相似度
+与参考答案的语义相似度（向量相似度）
+sentence-transformers
+C. 端到端评测（End-to-End）
+将检索 + 生成作为黑盒，评测最终答案质量：
+答案准确率（Accuracy）：生成答案与参考答案的匹配度
+首字延迟（TTFT - Time To First Token）：从提问到第一个 token 的时间
+完整响应时间：从提问到完整回答的总时间
+幻觉率（Hallucination Rate）：答案中包含文档未提及信息的比例
+拒答率：正确识别"文档中无相关信息"的比例（避免强行编造回答）
+4.4 推荐技术方案
+方案一：RAGAS 评测框架（推荐优先采用）
+RAGAS（RAG Assessment）是专门为 RAG 系统设计的评测框架，无需大量标注数据即可评测。
+安装：pip install ragas datasets
+集成方式：新建 services/evaluation_service.py，封装 RAGAS 评测流程
+需要的输入：question, answer, contexts（检索到的文档片段）
+自动计算：Faithfulness, Answer Relevancy, Context Recall, Context Precision, Context Relevancy 等指标
+可同时支持 LLM-as-Judge 模式（用更强的模型做评判者）
+建议配合少量人工标注的 ground_truth 做对照验证
+方案二：自建评测模块
+在项目中新建 services/evaluation_service.py 和 pages/evaluation.py（评测管理页面），包含：
+评测数据集管理：上传 / 编辑 / 导出 QA 评测集
+批量回归测试：对所有 QA 对跑一遍完整 RAG 流程，计算各项指标
+分环节指标采集：在 rag_engine 中增加 hook 点，记录每一步的中间结果
+评测报告生成：自动生成包含指标对比、趋势图的评测报告
+A/B 测试支持：同时跑两组不同配置（如不同 chunk_size、不同 top_k），对比效果
+定时评测：通过定时任务或手动触发，定期对知识库跑评测，监控质量变化
+4.5 数据库表扩展建议
+为支持评测系统，建议新增以下数据库表：
+eval_datasets — 评测数据集元信息：id, name, description, created_at
+eval_qa_pairs — 问答对：id, dataset_id, question, ground_truth_answer, relevant_doc_ids(JSON), difficulty, category
+eval_runs — 评测运行记录：id, dataset_id, config_snapshot(JSON), started_at, completed_at, status
+eval_results — 单条评测结果：id, run_id, qa_pair_id, retrieved_doc_ids(JSON), generated_answer, faithfulness_score, answer_relevance_score, context_recall_score, context_precision_score, latency_ms, hallucination_flag
+user_feedback — 用户反馈：id, message_id, rating(1-5), feedback_type, comment, created_at
+4.6 技术选型建议
+用途
+推荐方案
+说明
+RAG 评测框架
+RAGAS（强烈推荐）
+专为 RAG 设计，社区活跃，指标全面
+传统 NLG 指标
+nltk + rouge-score
+BLEU/ROUGE 兜底，不依赖 LLM，成本低
+LLM-as-Judge
+GPT-4o / Qwen-Max
+用强模型评判弱模型，成本可控
+语义相似度
+sentence-transformers
+轻量，可本地运行，无需 API 调用
+评测数据集格式
+JSON / JSONL
+简单通用，方便 Git 版本管理
+前端评测页面
+Streamlit（新增页面）
+与现有架构一致，开发成本低
+可视化
+Streamlit Charts / Plotly
+指标趋势图、雷达图、对比柱状图
+4.7 建议新增的文件结构
+services/  evaluation_service.py     # 评测核心逻辑（RAGAS 集成、指标计算）  query_rewriter.py          # Query 改写模块（配合 2.6）  reranker.py                # Rerank 重排序模块（配合 2.8）  bm25_retriever.py          # BM25 关键词检索器（配合 2.7）pages/  evaluation.py              # 评测管理页面（Streamlit）data/  eval/    datasets/                # 评测数据集 JSON/JSONL    results/                 # 评测结果报告    snapshots/               # 评测配置快照（保证可复现）database.py                  # 新增评测相关 ORM 模型
+五、推荐实施路线
+综合考虑依赖关系和业务价值，建议按以下顺序推进：
+第一阶段（1-2 周）：搭建评测系统：RAGAS 集成 + 评测数据集构建。先有尺子，再量优化效果。
+第二阶段（2-3 周）：Query 改写 + BM25 混合检索：对召回率提升最直接，且相互独立可并行推进。
+第三阶段（2-3 周）：知识工程优化：LLM 语义切分 + 自动打 Tag + Rerank 加权。
+第四阶段（2-3 周）：反馈回流 + Agentic RAG：用户反馈收集 + Agent 决策是否检索。
+第五阶段（持续）：持续评测、微调、知识库维护，跑出真正的知识飞轮。
+核心原则：先评测，后优化。用数据驱动改进方向。评测系统是判断所有优化是否有效的基石，应当最优先建设。
