@@ -1,0 +1,127 @@
+# ============================================================
+# RAG Service 配置
+# ============================================================
+server:
+  port: 8082
+
+spring:
+  application:
+    name: rag-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/doc_search?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 3
+      maximum-pool-size: 15
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # Redis (查询缓存 + 向量缓存)
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: 30
+          max-idle: 15
+
+  # Spring Cache (基于 Redis)
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000        # 默认 1h
+      cache-null-values: false
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+      config:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        file-extension: yml
+
+# ── ChromaDB Sidecar ──
+chromadb:
+  base-url: ${CHROMADB_HOST:http://127.0.0.1}:${CHROMADB_PORT:8001}
+  timeout-sec: 30
+
+# ── LLM API ──
+llm:
+  api-key: ${LLM_API_KEY:}
+  api-base: ${LLM_API_BASE:https://api.openai.com/v1}
+  model: ${LLM_MODEL:gpt-3.5-turbo}
+  temperature: 0.7
+  max-tokens: 2048
+  timeout-sec: 120
+
+# ── Embedding API ──
+embedding:
+  api-key: ${EMBEDDING_API_KEY:}
+  api-base: ${EMBEDDING_API_BASE:https://api.openai.com/v1}
+  model: ${EMBEDDING_MODEL:text-embedding-3-small}
+  dimension: 1536
+
+# ── 检索参数 ──
+retrieval:
+  top-k: 5
+  similarity-threshold: 0.5
+  multiplier: 3                       # 重排序前过度获取倍数
+  hybrid-search-enabled: true
+  rerank-enabled: true
+  query-rewrite-enabled: true
+  context-compression-enabled: true
+
+# ── Resilience4j (熔断降级) ──
+resilience4j:
+  circuitbreaker:
+    instances:
+      llmApi:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+      embeddingApi:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+  ratelimiter:
+    instances:
+      llmPerUser:
+        limit-for-period: 30
+        limit-refresh-period: 1m
+        timeout-duration: 0s
+      embeddingApi:
+        limit-for-period: 60
+        limit-refresh-period: 1m
+        timeout-duration: 0s
+  retry:
+    instances:
+      llmApi:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers
+
+logging:
+  level:
+    com.smartdoc.rag: DEBUG

@@ -1,0 +1,99 @@
+# ============================================================
+# Document Service 配置
+# ============================================================
+server:
+  port: 8083
+
+spring:
+  application:
+    name: document-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/doc_search?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+      config:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        file-extension: yml
+
+  # 文件上传限制
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+# ── MinIO 对象存储 ──
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: smart-doc-documents
+  region: us-east-1
+
+# ── RocketMQ ──
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+  producer:
+    group: doc-process-producer
+    send-message-timeout: 3000
+  consumer:
+    group: doc-process-consumer
+    topic: doc-process-topic
+
+# ── 文档处理 Worker 配置 ──
+document:
+  processing:
+    worker-pool-size: 4
+    embed-batch-size: 10
+    max-retries: 3
+
+outbox:
+  poll-interval-ms: 1000
+  batch-size: 50
+  max-attempts: 10
+
+# ── ChromaDB (向量写入) ──
+chromadb:
+  base-url: ${CHROMADB_HOST:http://127.0.0.1}:${CHROMADB_PORT:8001}
+
+embedding:
+  api-key: ${EMBEDDING_API_KEY:}
+  api-base: ${EMBEDDING_API_BASE:https://api.openai.com/v1}
+  model: ${EMBEDDING_MODEL:text-embedding-3-small}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  level:
+    com.smartdoc.document: DEBUG

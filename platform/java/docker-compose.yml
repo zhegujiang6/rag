@@ -1,0 +1,296 @@
+# ============================================================
+# 智能文档检索助手 — 开发环境 Docker Compose
+#
+# 启动所有基础设施 + Java 微服务 + Streamlit 前端
+#
+# 用法:
+#   docker-compose up -d                          # 启动全部
+#   docker-compose up -d mysql redis nacos        # 仅基础设施
+#   docker-compose logs -f rag-service            # 查看 RAG 服务日志
+# ============================================================
+services:
+  # ==========================================================
+  # 基础设施
+  # ==========================================================
+
+  mysql:
+    image: mysql:8.0
+    container_name: smartdoc-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      MYSQL_DATABASE: doc_search
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartdoc-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartdoc-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-smartdoc-redis}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-smartdoc-redis}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smartdoc-net
+
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: smartdoc-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - smartdoc-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: smartdoc-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartdoc-net
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.0
+    container_name: smartdoc-rocketmq-namesrv
+    restart: unless-stopped
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    networks:
+      - smartdoc-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.0
+    container_name: smartdoc-rocketmq-broker
+    restart: unless-stopped
+    command: sh mqbroker -n rocketmq-namesrv:9876
+    depends_on:
+      - rocketmq-namesrv
+    environment:
+      JAVA_OPT_EXT: "-Duser.home=/home/rocketmq -Xms512m -Xmx512m"
+    ports:
+      - "10911:10911"
+    networks:
+      - smartdoc-net
+
+  chromadb-sidecar:
+    build: ./chromadb-sidecar
+    container_name: smartdoc-chromadb
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - chroma-data:/app/chroma_data
+    environment:
+      CHROMA_PERSIST_DIR: /app/chroma_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smartdoc-net
+
+  # ==========================================================
+  # Java 微服务
+  # ==========================================================
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: smartdoc-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NACOS_HOST: nacos
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-smartdoc-redis}
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smartdoc-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: smartdoc-user-service
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-smartdoc-redis}
+      NACOS_HOST: nacos
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - smartdoc-net
+
+  rag-service:
+    build:
+      context: .
+      dockerfile: rag-service/Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: ${RAG_REPLICAS:-2}   # 不设置 container_name 才能扩容
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-smartdoc-redis}
+      NACOS_HOST: nacos
+      CHROMADB_HOST: http://chromadb-sidecar
+      CHROMADB_PORT: 8001
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_API_BASE: ${LLM_API_BASE:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-3.5-turbo}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      chromadb-sidecar:
+        condition: service_healthy
+    networks:
+      - smartdoc-net
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: ${DOCUMENT_REPLICAS:-2}
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-smartdoc-redis}
+      NACOS_HOST: nacos
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
+      CHROMADB_HOST: http://chromadb-sidecar
+      CHROMADB_PORT: 8001
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      chromadb-sidecar:
+        condition: service_healthy
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - smartdoc-net
+
+  evaluation-service:
+    build:
+      context: .
+      dockerfile: evaluation-service/Dockerfile
+    container_name: smartdoc-evaluation-service
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456}
+      NACOS_HOST: nacos
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - smartdoc-net
+
+  # ==========================================================
+  # 前端
+  # ==========================================================
+
+  streamlit:
+    build: ./streamlit-frontend
+    container_name: smartdoc-streamlit
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      API_GATEWAY_URL: http://gateway:8080
+    depends_on:
+      - gateway
+    networks:
+      - smartdoc-net
+
+# ==========================================================
+# 数据卷 & 网络
+# ==========================================================
+
+volumes:
+  mysql-data:
+  redis-data:
+  minio-data:
+  chroma-data:
+
+networks:
+  smartdoc-net:
+    driver: bridge

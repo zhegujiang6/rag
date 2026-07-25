@@ -1,0 +1,37 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+/platform/java/k8s/secrets.yaml
+
+# Local AI assistant configuration
+.claude/
+.codex-review/
+.docx-review/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Runtime data
+data/chroma/
+data/uploads/
+data/extracted_images/
+data/evaluations/
+
+# Java build output
+**/target/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

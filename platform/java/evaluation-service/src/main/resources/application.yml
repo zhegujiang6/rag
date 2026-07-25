@@ -1,0 +1,60 @@
+# ============================================================
+# Evaluation Service 配置
+# ============================================================
+server:
+  port: 8084
+
+spring:
+  application:
+    name: evaluation-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/doc_search?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 3
+      maximum-pool-size: 10
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+      config:
+        server-addr: ${NACOS_HOST:127.0.0.1}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        file-extension: yml
+
+# ── RAGAS 评测配置 ──
+evaluation:
+  default-top-k: 5
+  default-test-count: 10
+  dataset-dir: ./eval_datasets
+  supported-metrics:
+    - context_precision
+    - context_recall
+    - faithfulness
+    - answer_relevancy
+    - context_entity_recall
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.smartdoc.evaluation: DEBUG

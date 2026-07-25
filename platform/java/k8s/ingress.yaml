@@ -1,0 +1,57 @@
+# ============================================================
+# K8s Ingress — 外部流量入口
+# 需要安装 Ingress Controller (如 nginx-ingress)
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smartdoc-ingress
+  namespace: smart-doc-search
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # WebSocket 支持 (Streamlit 需要)
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/websocket-services: "streamlit-service"
+spec:
+  tls:
+    - hosts:
+        - smartdoc.example.com
+      secretName: smartdoc-tls
+  rules:
+    - host: smartdoc.example.com
+      http:
+        paths:
+          # API 请求 → Gateway
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+          # Actuator → Gateway
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+          # Streamlit WebSocket
+          - path: /_stcore
+            pathType: Prefix
+            backend:
+              service:
+                name: streamlit-service
+                port:
+                  number: 8501
+          # Streamlit 静态资源
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: streamlit-service
+                port:
+                  number: 8501

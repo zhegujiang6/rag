@@ -1,0 +1,10 @@
+# ============================================================
+# K8s Namespace — 智能文档检索助手
+# ============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smart-doc-search
+  labels:
+    app: smart-doc-search
+    env: production
